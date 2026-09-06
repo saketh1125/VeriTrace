@@ -148,6 +148,26 @@ python -m app.cli.main --platform instagram --profile example --max-posts 10
 
 ## Development order
 
+### InsightFace / ONNX Runtime setup
+
+Install the project dependencies (including the local InsightFace and ONNX Runtime adapter):
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+The first `FaceService()` construction downloads the configured InsightFace `buffalo_l`
+model pack into InsightFace's local model cache. It runs CPU-only by default. To smoke-test
+the real runtime against an image containing exactly one clear face, run:
+
+```bash
+python -m app.face.smoke_test path/to/face.jpg
+```
+
+The smoke test reports only embedding dimensions and detection score; it never prints or
+persists the embedding. Runtime initialization failures are surfaced as
+`INSIGHTFACE_INITIALIZATION_FAILED`.
+
 ### Phase 1 — Live Apify validation (current)
 
 Run each pinned Actor against a known public profile and known public post, inspect the actual dataset JSON, freeze sanitized fixtures, and harden normalization.
