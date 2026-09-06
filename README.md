@@ -174,6 +174,8 @@ Add consent, image input, platform target, progress, candidate results, and bloc
 
 See `docs/DEVELOPMENT.md` for acceptance criteria.
 
+Phase 1 live Actor results and known provider quirks are recorded in [`docs/APIFY_VALIDATION.md`](docs/APIFY_VALIDATION.md).
+
 ## Security/privacy
 
 Read `docs/SECURITY_PRIVACY.md` before adding external integrations. The most important rules are:

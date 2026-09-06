@@ -1,0 +1,21 @@
+[
+  {
+    "source_profile_url": "https://www.linkedin.com/in/satyanadella/",
+    "post_id": "7502385664945111040",
+    "post_urn": "urn:li:ugcPost:7502385616106512385",
+    "post_url": "https://www.linkedin.com/posts/satyanadella_it-was-a-great-week-for-innovation-across-activity-7502385664945111040-uGka",
+    "post_type": "post",
+    "text": "It was a great week for innovation across the model ecosystem.",
+    "published_at": "2026-09-06T15:22:10.108Z",
+    "author_name": "Satya Nadella",
+    "author_public_identifier": "satyanadella",
+    "media": [
+      {
+        "type": "video",
+        "url": "https://media.example.test/linkedin/video.mp4",
+        "thumbnail_url": "https://media.example.test/linkedin/thumbnail.jpg"
+      }
+    ],
+    "original_post": null
+  }
+]

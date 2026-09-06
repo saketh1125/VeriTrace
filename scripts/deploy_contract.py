@@ -44,7 +44,7 @@ def main() -> None:
     signed = account.sign_transaction(tx)
     tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
     receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-    print(json.dumps({"contract": receipt.contractAddress, "tx_hash": tx_hash.hex()}, indent=2))
+    print(json.dumps({"contract": getattr(receipt, "contractAddress", None), "tx_hash": tx_hash.hex()}, indent=2))
 
 
 if __name__ == "__main__":

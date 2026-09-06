@@ -21,6 +21,13 @@ dependencies = [
   "py-solc-x>=2.0,<3",
 ]
 
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.4,<9",
@@ -35,4 +42,3 @@ addopts = "-q"
 
 [tool.ruff]
 line-length = 100
-

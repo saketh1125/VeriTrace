@@ -1,0 +1,20 @@
+[
+  {
+    "record_type": "post",
+    "source_platform": "facebook",
+    "source_profile_id": "4",
+    "source_profile_url": "https://www.facebook.com/zuck?sk=posts",
+    "source_profile_name": "Mark Zuckerberg",
+    "source_post_id": "10117844921640781",
+    "source_url": "https://www.facebook.com/reel/1370929081132805/",
+    "created_at": "2026-08-10T10:05:29.000Z",
+    "raw_text": "I believe everyone should have access to superintelligence.",
+    "author": {"id": "4", "source_user_id": "4", "name": "Mark Zuckerberg", "url": "https://www.facebook.com/zuck"},
+    "media": [
+      {"source_media_id": "1370929081132805", "media_type": "photo", "source_url": "https://media.example.test/facebook/photo-1.jpg", "thumbnail_url": "https://media.example.test/facebook/photo-1.jpg", "width": 0, "height": 0},
+      {"source_media_id": "photo-2", "media_type": "photo", "source_url": "https://media.example.test/facebook/photo-2.jpg", "thumbnail_url": "https://media.example.test/facebook/photo-2.jpg", "width": 1000, "height": 1760}
+    ],
+    "video_urls": [],
+    "coverage_status": "complete_target_reached"
+  }
+]

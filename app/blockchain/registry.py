@@ -24,6 +24,17 @@ ABI = [
     },
 ]
 
+BASE_SEPOLIA_CHAIN_ID = 84532
+
+
+def _hash_bytes(evidence_hash_hex: str) -> bytes:
+    if not isinstance(evidence_hash_hex, str) or len(evidence_hash_hex) != 64:
+        raise ValueError("INVALID_EVIDENCE_HASH")
+    try:
+        return bytes.fromhex(evidence_hash_hex)
+    except ValueError as exc:
+        raise ValueError("INVALID_EVIDENCE_HASH") from exc
+
 
 class BlockchainRegistry:
     def __init__(self, rpc_url: str, private_key: str, contract_address: str):
@@ -32,13 +43,15 @@ class BlockchainRegistry:
         self.w3 = Web3(Web3.HTTPProvider(rpc_url))
         if not self.w3.is_connected():
             raise RuntimeError("Blockchain RPC is unavailable")
+        if self.w3.eth.chain_id != BASE_SEPOLIA_CHAIN_ID:
+            raise RuntimeError(f"UNEXPECTED_CHAIN_ID: expected {BASE_SEPOLIA_CHAIN_ID}")
         self.account = self.w3.eth.account.from_key(private_key)
         self.contract: Contract = self.w3.eth.contract(
             address=Web3.to_checksum_address(contract_address), abi=ABI
         )
 
     def attest(self, evidence_hash_hex: str) -> str:
-        digest = bytes.fromhex(evidence_hash_hex)
+        digest = _hash_bytes(evidence_hash_hex)
         tx = self.contract.functions.attest(digest).build_transaction(
             {
                 "from": self.account.address,
@@ -51,8 +64,11 @@ class BlockchainRegistry:
         )
         signed = self.account.sign_transaction(tx)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        if int(receipt["status"]) != 1:
+            raise RuntimeError("ATTESTATION_TRANSACTION_FAILED")
         return tx_hash.hex()
 
     def verify(self, evidence_hash_hex: str) -> dict:
-        exists, timestamp, submitter = self.contract.functions.verify(bytes.fromhex(evidence_hash_hex)).call()
+        exists, timestamp, submitter = self.contract.functions.verify(_hash_bytes(evidence_hash_hex)).call()
         return {"exists": bool(exists), "timestamp": int(timestamp), "submitter": submitter}

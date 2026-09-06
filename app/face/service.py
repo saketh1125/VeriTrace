@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 import cv2
 import numpy as np
@@ -16,7 +17,7 @@ class FaceEmbedding:
 class FaceService:
     def __init__(self):
         # CPU-first local inference for reproducibility and privacy.
-        from insightface.app import FaceAnalysis
+        from insightface.app import FaceAnalysis  # type: ignore[import-untyped]
 
         self.app = FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
         self.app.prepare(ctx_id=0, det_size=(640, 640))
@@ -35,7 +36,7 @@ class FaceService:
         embedding = face.normed_embedding.astype(np.float32)
         return FaceEmbedding(
             vector=embedding,
-            bbox=tuple(float(x) for x in face.bbox),
+            bbox=cast(tuple[float, float, float, float], tuple(float(x) for x in face.bbox)),
             det_score=float(face.det_score),
         )
 
