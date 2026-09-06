@@ -1,0 +1,38 @@
+[project]
+name = "hh-goa-face-chain"
+version = "0.1.0"
+description = "Hacker House Goa 2026 Task 3: face identification, social-content verification, and blockchain attestation."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "uvicorn[standard]>=0.35,<1",
+  "pydantic>=2.11,<3",
+  "pydantic-settings>=2.10,<3",
+  "python-multipart>=0.0.20,<1",
+  "httpx>=0.28,<1",
+  "numpy>=2.2,<3",
+  "opencv-python-headless>=4.12,<5",
+  "Pillow>=11,<12",
+  "imagehash>=4.3,<5",
+  "insightface>=0.7.3,<1",
+  "onnxruntime>=1.22,<2",
+  "apify-client>=3.2,<4",
+  "web3>=7.14,<8",
+  "py-solc-x>=2.0,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.1,<2",
+  "ruff>=0.12,<1",
+  "mypy>=1.17,<2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+
