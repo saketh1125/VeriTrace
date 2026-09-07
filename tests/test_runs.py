@@ -66,6 +66,7 @@ class FakeChain:
         self.exists = exists
         self.attest_error = attest_error
         self.attested: list[str] = []
+        self.verify_calls = 0
 
     def attest(self, digest: str) -> str:
         if self.attest_error is not None:
@@ -74,7 +75,12 @@ class FakeChain:
         return "0xabc123"
 
     def verify(self, digest: str) -> dict:
-        return {"exists": self.exists, "timestamp": 1, "submitter": "0xattester"}
+        self.verify_calls += 1
+        if isinstance(self.exists, list):
+            current = self.exists[min(self.verify_calls - 1, len(self.exists) - 1)]
+        else:
+            current = self.exists
+        return {"exists": current, "timestamp": 1, "submitter": "0xattester"}
 
 
 async def fake_fetch(url: str) -> tuple[bytes, str]:
@@ -170,6 +176,19 @@ async def test_missing_chain_record_is_surfaced_not_hidden() -> None:
 
 
 @pytest.mark.asyncio
+async def test_lagging_chain_read_is_retried_before_giving_up() -> None:
+    lagging = FakeChain(exists=[False, False, True])
+    service, _ = make_service(chain=lagging)
+    service.verify_retry_delay = 0.0
+    record, query = service.create_run(b"selfie", Platform.INSTAGRAM, "profile", "example", "1.0", True, 5, True)
+    final = await service.execute_run(record.run_id, b"selfie", query, "1.0", True)
+
+    assert final.result is not None
+    assert final.result.blockchain.integrity == "VERIFIED"
+    assert lagging.verify_calls == 3
+
+
+@pytest.mark.asyncio
 async def test_attestation_failure_keeps_face_verification_result() -> None:
     service, _ = make_service(chain=FakeChain(attest_error=RuntimeError("RPC_DOWN")))
     record, query = service.create_run(b"selfie", Platform.INSTAGRAM, "profile", "example", "1.0", True, 5, True)
@@ -262,6 +281,11 @@ def test_api_run_status_sse_preflight_and_diagnostics() -> None:
         streamed = [line[7:] for line in stream.text.splitlines() if line.startswith("event: ")]
         for required in ("RUN_STARTED", "CANDIDATE_MATCH_RESULT", "RUN_COMPLETED"):
             assert required in streamed
+
+        resumed = client.get(f"/api/runs/{run_id}/events", headers={"Last-Event-ID": "0"})
+        resumed_names = [line[7:] for line in resumed.text.splitlines() if line.startswith("event: ")]
+        assert resumed_names == streamed[1:]
+        assert resumed_names and resumed_names[-1] == "RUN_COMPLETED"
 
         preflight = client.post(
             "/api/preflight", files={"face_image": ("face.jpg", b"selfie-bytes", "image/jpeg")}

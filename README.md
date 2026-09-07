@@ -1,80 +1,142 @@
-# Hacker House Goa 2026 — Task 3
+# VeriTrace — Hacker House Goa 2026 · Task 3
 
-**Face Identification → User-Directed Public Social Discovery → Independent Face Verification → Blockchain Attestation**
+**Face scan → user-directed public social discovery → independent face verification → evidence hash → blockchain attestation → independent verification.**
 
-## What this builds
+A consent-first pipeline that establishes whether a consented input face appears in
+public social content located by a user-supplied social target — with a tamper-evident,
+on-chain commitment to the evidence.
 
-A consent-first pipeline that:
+**Claim boundary:** this demonstrates *face-to-content correspondence*. It does not prove
+legal identity, authorship, account ownership, consent of other depicted people, or
+truthfulness of content.
 
-1. accepts a face scan from the user;
-2. accepts a public social post URL or public profile/username;
-3. retrieves public candidate posts through a platform adapter;
-4. fetches candidate media;
-5. independently detects/encodes faces and verifies correspondence with the input face;
-6. creates a deterministic evidence record;
-7. commits the evidence hash to Base Sepolia;
-8. independently re-hashes the evidence and verifies the on-chain commitment.
+## How it works
 
-**Claim boundary:** this demonstrates face-to-content correspondence. It does not prove legal identity, authorship, account ownership, consent of other depicted people, or truthfulness of content.
-
-## Locked stack
-
-- Python 3.11+
-- FastAPI
-- Pydantic
-- InsightFace / ArcFace + ONNX Runtime
-- OpenCV + Pillow
-- ImageHash (pHash)
-- Apify Python client
-- HTTPX
-- Web3.py
-- Solidity 0.8.24
-- Base Sepolia (chain ID `84532`)
-- pytest + Ruff + mypy
+1. The user gives explicit consent, uploads one face image, and supplies a **public post
+   URL or public profile/username** plus platform.
+2. A platform adapter resolves the target into normalized `SocialPost` candidates
+   (Apify integration lives behind `app/discovery`; it never declares a match).
+3. Each candidate's media is fetched over validated HTTPS and checked locally:
+   **face similarity is the acceptance gate** (cosine similarity vs. the input ArcFace
+   embedding); perceptual image similarity is supporting evidence only.
+4. The first verified candidate produces a canonical `EvidenceRecord`, hashed with
+   SHA-256. Selfies, embeddings, and biometric templates never leave the host.
+5. The evidence hash — and only the hash — is attested on **Base Sepolia** via
+   `EvidenceRegistry.sol`.
+6. An independent verifier recomputes the hash and reads the chain back:
+   `VERIFIED`, `TAMPERED`, or `BLOCKCHAIN_RECORD_NOT_FOUND`.
 
 ## Architecture
 
-```text
-Face Scan + Consent + Social Target
-                 |
-                 v
-         FastAPI / CLI
-          |          |
-          v          v
-     FaceService   DiscoveryService
-          |          |
-          |       Apify Actor
-          |          |
-          |      SocialPost[]
-          |          |
-          +-----> Candidate Media
-                       |
-                  MediaFetcher
-                       |
-               +-------+-------+
-               |               |
-          Image ranking    Face matching
-               |               |
-               +-------+-------+
-                       |
-                  Match Policy
-                       |
-                  EvidenceRecord
-                       |
-                    SHA-256
-                       |
-                  Base Sepolia
-                       |
-              Independent verifier
-                       |
-                 VERIFIED / TAMPERED
+```mermaid
+flowchart TD
+    C[Consent + Face Scan] --> F[Local Face Detection + ArcFace Embedding]
+    C --> T[Platform + Profile / Post Target]
+    T --> P[SocialContentProvider]
+    P --> A[Apify Actor]
+    A --> N[Normalize to SocialPost]
+    N --> M[Candidate Media URLs]
+    M --> D[Bounded HTTPS Media Fetch]
+    D --> I[Image Similarity Ranking]
+    D --> Q[Face Detection on Candidate Media]
+    Q --> S[Face Similarity vs Input Embedding]
+    I --> X[Match Policy: face gate 0.45]
+    S --> X
+    X -->|Verified| E[Canonical Evidence]
+    X -->|Reject| R[Next Candidate / Structured Failure]
+    E --> H[SHA-256 Evidence Hash]
+    H --> B[Base Sepolia Evidence Registry]
+    B --> V[Independent Recompute + Chain Read]
+    V --> O[VERIFIED / TAMPERED]
 ```
 
-See `docs/ARCHITECTURE.md` for the locked design.
+Source: [`diagrams/locked-flow.mmd`](diagrams/locked-flow.mmd). Locked design:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+### Runtime request flow (what the UI drives)
+
+```mermaid
+sequenceDiagram
+    participant UI as Console (React)
+    participant API as FastAPI /api
+    participant RUN as RunService
+    participant FACE as InsightFace (local)
+    participant AP as Apify provider
+    participant CHAIN as Base Sepolia
+    UI->>API: POST /api/runs (face image + target + consent)
+    API-->>UI: 202 {run_id}
+    UI->>API: GET /api/runs/{id} + SSE /events
+    RUN->>FACE: detect + embed input (exactly one face)
+    RUN->>AP: discover bounded public posts
+    loop candidates
+        RUN->>RUN: fetch media, face-match, rank
+    end
+    RUN->>RUN: build evidence + SHA-256
+    RUN->>CHAIN: attest evidence hash
+    RUN->>CHAIN: independent verify (recompute vs on-chain)
+    API-->>UI: RUN_COMPLETED {VERIFIED, evidence, tx, integrity}
+```
+
+Full endpoint/event contract: [`docs/RUN_API.md`](docs/RUN_API.md).
+
+### Evidence lifecycle
+
+```text
+post metadata + selected media + match scores + retrieval context
+                         |
+                         v
+                 canonical EvidenceRecord (sorted-key compact JSON)
+                         |
+                   SHA-256(evidence) ──► media bytes also SHA-256'd separately
+                         |
+                         v
+              Base Sepolia commitment {evidenceHash, attester, attestedAt}
+```
+
+Hashing rules: [`docs/DATA_CONTRACTS.md`](docs/DATA_CONTRACTS.md).
+
+## Tech stack
+
+### Backend
+
+| Layer | Technology | Role |
+|---|---|---|
+| API | FastAPI + Uvicorn | HTTP boundary, run/SSE endpoints, validation |
+| Schemas | Pydantic v2 + pydantic-settings | Contracts, env-driven config |
+| Face | InsightFace `buffalo_l` (ArcFace) + ONNX Runtime (CPU) | Local detection, quality gates, 512-d embeddings |
+| Vision utils | OpenCV (headless) + Pillow | Decoding, face crops |
+| Image signal | ImageHash (pHash) | Supporting similarity, never the gate |
+| Discovery | Apify Python client (pinned community Actors) | Public-post retrieval behind provider interface |
+| Media fetch | HTTPX | Bounded HTTPS fetch with SSRF/private-net defenses |
+| Chain client | Web3.py | Attest + independent read-back |
+| Contract | Solidity 0.8.24 (`contracts/EvidenceRegistry.sol`) | `attest(bytes32)` / `verify(bytes32)` registry |
+| Network | Base Sepolia (chain ID `84532`) | Attestation ledger |
+| Language | Python 3.11+ | Type-annotated throughout |
+
+### Frontend (`frontend/` — thin console, backend is source of truth)
+
+| Layer | Technology | Role |
+|---|---|---|
+| Framework | React 18 + TypeScript (strict) | Operator console components |
+| Build | Vite 6 | Dev server + production build |
+| Styling | Tailwind CSS 4 | Utility styling, neutral console theme |
+| Icons | Lucide React | Status/action icons only |
+| Live updates | Server-Sent Events (`EventSource`) | Pipeline, candidates, logs stream |
+| State | React state + `useRun` hook | No store library; server state is canonical |
+| Tests | Vitest + React Testing Library + jsdom | Reducer, error-copy, API-helper tests |
+
+### Quality gates
+
+| Check | Command |
+|---|---|
+| Backend tests | `pytest -q` |
+| Backend lint | `python -m ruff check app tests` |
+| Backend types | `python -m mypy app/runs app/api/runs.py` |
+| Frontend tests | `npm test` (in `frontend/`) |
+| Frontend lint | `npm run lint` |
+| Frontend typecheck + build | `npm run build` |
 
 ## Apify integrations
-
-Current v1 targets:
 
 | Platform | Profile | Direct post |
 |---|---|---|
@@ -83,37 +145,53 @@ Current v1 targets:
 | Facebook | `spbotdel/facebook-profile-posts-all-photos-scraper` | `scrapyspider/facebook-post-scraper` |
 | Reddit | `scrapers_lat/reddit-scraper` | `scrapers_lat/reddit-scraper` |
 
-These Actors are community-maintained integrations. Their IDs live in configuration and their raw responses are normalized immediately behind the provider interface. Live validation is required before treating an Actor as a stable dependency.
-
-Actor references:
-- Instagram: https://apify.com/parseforge/instagram-posts-scraper
-- LinkedIn profile posts: https://apify.com/data-slayer/linkedin-profile-posts-scraper
-- LinkedIn direct posts: https://apify.com/fetch_cat/linkedin-posts-scraper
-- Facebook profile posts/photos: https://apify.com/spbotdel/facebook-profile-posts-all-photos-scraper
+Community-maintained Actors confined to `app/discovery`; raw output is normalized to
+`SocialPost` immediately and never trusted for matching. Live validation results and
+quirks: [`docs/APIFY_VALIDATION.md`](docs/APIFY_VALIDATION.md).
 
 ## Repository map
 
 ```text
 app/
-  api/             HTTP boundary
+  api/             HTTP boundary (+ run/SSE routes)
   cli/             local operator workflow
   config/          environment/configuration
   discovery/       Apify/platform adapters + normalization
   extraction/      secure candidate media fetching
   face/            face detection/embedding
-  matching/        similarity + match policy
+  matching/        similarity + match policy (face gate 0.45)
   evidence/        evidence model + canonical hashing
   blockchain/      Base Sepolia contract client
   verification/    end-to-end orchestration
-  runs/            run lifecycle + SSE event contract (`docs/RUN_API.md`)
-contracts/         Solidity registry
-scripts/            deployment utilities
-frontend/          thin verification console (React + Vite, backend is source of truth)
-docs/               durable architecture/security/data/development docs
-adr/                accepted architecture decisions
-tests/              unit/integration/fixture tests
-AGENTS.md           Codex project guide
+  runs/            run lifecycle + SSE event contract (docs/RUN_API.md)
+contracts/         EvidenceRegistry.sol
+scripts/           deployment utilities (deploy_contract.py)
+frontend/          thin verification console (React + Vite)
+examples/          demo face input used in live validation
+diagrams/          locked-flow.mmd (rendered above)
+docs/              architecture / data / security / development / run API / Apify validation
+adr/               accepted architecture decisions
+tests/             unit/integration/fixture tests (+ fixtures/)
+AGENTS.md           contributor project guide
 ```
+
+## Proven live (Base Sepolia round-trip)
+
+Real end-to-end run `vr_20260907_172601_e145f2`: public portrait in, Instagram profile
+`@barackobama` discovery via live Apify (5 posts → 16 candidates), local InsightFace
+matching, evidence hash, on-chain attestation, independent read-back.
+
+| Fact | Value |
+|---|---|
+| Matched post | `https://www.instagram.com/p/Dc1taGQvhFQ/` |
+| Face similarity / threshold | `0.840` / `0.45` (`VERIFIED_MATCH`) |
+| Evidence SHA-256 | `78df6f32fba18b805c343235c6478cad5a8cc016b5552073568688fb374cce71` |
+| Network | Base Sepolia (`84532`) |
+| Registry | `0xB46370Ee35FCA3d0FF4C8efaC6A79B8bAaCe6F2a` |
+| Attestation tx | `2fa7ab3d630eaa78bf7a9c98a7197f15745c467634a8e77edefcf37e284a76dc` |
+| Block | `46516853` (receipt status `1`) |
+| On-chain read-back | `exists=True`, recomputed hash matches commitment |
+| Final state | **VERIFIED** |
 
 ## Local setup
 
@@ -125,90 +203,86 @@ python -m venv .venv
 # source .venv/bin/activate
 
 pip install -e ".[dev]"
-cp .env.example .env
+cp .env.example .env   # then fill in .env.local (never commit it)
 ```
 
-Set `APIFY_API_TOKEN` for live provider tests. Set RPC/wallet variables only for blockchain tests/deployment.
+Environment (names only — values stay in `.env.local`):
 
-Run tests:
+| Variable | Required for |
+|---|---|
+| `APIFY_API_TOKEN` | Live discovery |
+| `BASE_SEPOLIA_RPC_URL` | Chain reads/writes |
+| `BLOCKCHAIN_PRIVATE_KEY` | Attestation + contract deploy (funded Base Sepolia key) |
+| `EVIDENCE_REGISTRY_ADDRESS` | Attestation + verification (from `deploy_contract.py`) |
+| `FACE_MATCH_THRESHOLD` | Default `0.45` |
+| `MAX_POSTS_PER_PROFILE` | Default `30` |
+
+Run the backend:
 
 ```bash
-pytest -q
+uvicorn app.api.main:app --reload   # :8000
 ```
 
-Run API:
+Run the console:
 
 ```bash
-uvicorn app.api.main:app --reload
+cd frontend
+npm install
+npm run dev    # :5173, expects the API at http://localhost:8000
 ```
 
-Run CLI:
+Deploy the registry (needs RPC URL + funded key in the environment):
 
 ```bash
-python -m app.cli.main --platform instagram --profile example --max-posts 10
+python scripts/deploy_contract.py
 ```
 
-## Development order
-
-### InsightFace / ONNX Runtime setup
-
-Install the project dependencies (including the local InsightFace and ONNX Runtime adapter):
-
-```bash
-python -m pip install -e ".[dev]"
-```
-
-The first `FaceService()` construction downloads the configured InsightFace `buffalo_l`
-model pack into InsightFace's local model cache. It runs CPU-only by default. To smoke-test
-the real runtime against an image containing exactly one clear face, run:
+Face runtime smoke test (downloads `buffalo_l` once, CPU-only, prints no biometrics):
 
 ```bash
 python -m app.face.smoke_test path/to/face.jpg
 ```
 
-The smoke test reports only embedding dimensions and detection score; it never prints or
-persists the embedding. Runtime initialization failures are surfaced as
-`INSIGHTFACE_INITIALIZATION_FAILED`.
+CLI discovery:
 
-### Phase 1 — Live Apify validation (current)
+```bash
+python -m app.cli.main --platform instagram --profile example --max-posts 10
+```
 
-Run each pinned Actor against a known public profile and known public post, inspect the actual dataset JSON, freeze sanitized fixtures, and harden normalization.
+## Run API at a glance
 
-### Phase 2 — Face runtime
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/runs` | Start a run (image + target + consent) → `202 {run_id}` |
+| `GET` | `/api/runs/{id}` | Canonical status, candidates, result, error |
+| `GET` | `/api/runs/{id}/events` | `text/event-stream` SSE feed (`Last-Event-ID` resume) |
+| `GET` | `/api/runs` | Recent-run history |
+| `POST` | `/api/preflight` | One-face upload check (never returns embeddings) |
+| `GET` | `/api/diagnostics` | Model/threshold/config booleans (no secrets) |
 
-Install/model-load InsightFace and add face quality gates plus calibrated similarity thresholds.
-
-### Phase 3 — Media extraction
-
-Finish image/carousel support and bounded video keyframe extraction.
-
-### Phase 4 — Verification orchestration
-
-Wire discovery → media → face matching → evidence into one end-to-end service.
-
-### Phase 5 — Blockchain
-
-Deploy `EvidenceRegistry.sol` to Base Sepolia, attest evidence hashes, then independently verify them.
-
-### Phase 6 — Thin UI
-
-Add consent, image input, platform target, progress, candidate results, and blockchain verification status.
-
-See `docs/DEVELOPMENT.md` for acceptance criteria.
-
-Phase 1 live Actor results and known provider quirks are recorded in [`docs/APIFY_VALIDATION.md`](docs/APIFY_VALIDATION.md).
+Pipeline steps mirror the backend verbatim
+(`VALIDATING_INPUT → … → VERIFYING → COMPLETED/FAILED`); candidate, evidence, and
+blockchain states are rendered, never re-decided, by the frontend.
 
 ## Security/privacy
 
-Read `docs/SECURITY_PRIVACY.md` before adding external integrations. The most important rules are:
+Read [`docs/SECURITY_PRIVACY.md`](docs/SECURITY_PRIVACY.md) before adding integrations.
+Non-negotiables: explicit consent before biometrics; no selfies, embeddings, or
+templates on-chain or in logs; provider output and public URLs are untrusted
+(HTTPS-only, timeouts, size limits, content-type checks, SSRF blocking); no
+private-account access or access-control bypass; secrets only via environment.
 
-- explicit consent before biometric processing;
-- no raw biometric data on-chain;
-- provider output and public URLs are untrusted;
-- secure media fetching with SSRF defenses;
-- no private-account access or access-control bypass;
-- secrets only through environment/secrets storage.
+## Docs index
+
+- `docs/ARCHITECTURE.md` — locked component boundaries and workflow
+- `docs/DATA_CONTRACTS.md` — normalized shapes and canonical hashing
+- `docs/SECURITY_PRIVACY.md` — security/privacy contract
+- `docs/DEVELOPMENT.md` — phases and acceptance criteria
+- `docs/RUN_API.md` — run/SSE contract
+- `docs/APIFY_VALIDATION.md` — live provider evidence
+- `adr/` — accepted decisions (0005–0010)
 
 ## Codex
 
-`AGENTS.md` is intentionally short. It is a map to the durable repository knowledge rather than an encyclopedia. Codex should read the relevant `docs/` and `adr/` files before modifying architecture-sensitive code.
+`AGENTS.md` is intentionally short — a map to the durable repository knowledge. Read the
+relevant `docs/` and `adr/` files before modifying architecture-sensitive code.

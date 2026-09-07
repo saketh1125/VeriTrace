@@ -232,6 +232,8 @@ class RunService:
         image_similarity: ImageSimilarity = perceptual_similarity,
         face_threshold: float = 0.45,
         clock: Clock = _utcnow,
+        verify_retries: int = 6,
+        verify_retry_delay: float = 5.0,
     ) -> None:
         self.store = store
         self.providers = providers
@@ -243,6 +245,8 @@ class RunService:
         self.image_similarity = image_similarity
         self.face_threshold = face_threshold
         self.clock = clock
+        self.verify_retries = verify_retries
+        self.verify_retry_delay = verify_retry_delay
 
     @property
     def face_loaded(self) -> bool:
@@ -454,6 +458,8 @@ class RunService:
         blockchain = BlockchainView(evidence_hash=digest, registry=self.registry_address or None)
         if not attest:
             return blockchain
+        self.store.update(run_id, pipeline_step=PipelineStep.ATTESTING)
+        self.store.append_event(run_id, "BLOCKCHAIN_SUBMISSION_STARTED", {"evidence_sha256": digest})
         registry = self._blockchain_or_none(run_id)
         if registry is None:
             blockchain.status = "FAILED"
@@ -463,8 +469,6 @@ class RunService:
                 {"reason": "BLOCKCHAIN_NOT_CONFIGURED"},
             )
             return blockchain
-        self.store.update(run_id, pipeline_step=PipelineStep.ATTESTING)
-        self.store.append_event(run_id, "BLOCKCHAIN_SUBMISSION_STARTED", {"evidence_sha256": digest})
         try:
             tx_hash = await asyncio.to_thread(registry.attest, digest)
         except Exception as exc:
@@ -477,16 +481,13 @@ class RunService:
         blockchain.tx_hash = tx_hash
         self.store.append_event(run_id, "BLOCKCHAIN_SUBMITTED", {"tx_hash": tx_hash})
         self.store.update(run_id, pipeline_step=PipelineStep.VERIFYING)
-        try:
-            integrity = await asyncio.to_thread(
-                verify_evidence_record, match.evidence, registry  # type: ignore[arg-type]
-            )
-        except Exception as exc:
+        integrity = await self._read_back_with_retry(match, registry)
+        if integrity is None:
             blockchain.integrity = "UNKNOWN"
             self.store.append_event(
                 run_id,
                 "BLOCKCHAIN_SUBMISSION_FAILED",
-                {"stage": "verification", "reason": type(exc).__name__},
+                {"stage": "verification", "reason": "CHAIN_READ_FAILED"},
             )
             return blockchain
         blockchain.integrity = integrity
@@ -496,6 +497,22 @@ class RunService:
             run_id, "BLOCKCHAIN_VERIFIED", {"integrity": integrity, "tx_hash": tx_hash}
         )
         return blockchain
+
+    async def _read_back_with_retry(self, match: Any, registry: Any) -> str | None:
+        """Independently re-read the commitment. A fresh attestation may be
+        invisible to a lagging RPC replica for a few seconds, so retry a
+        missing record briefly; a mismatch is deterministic and never retried."""
+        try:
+            for attempt in range(self.verify_retries):
+                integrity = await asyncio.to_thread(
+                    verify_evidence_record, match.evidence, registry
+                )
+                if integrity != "BLOCKCHAIN_RECORD_NOT_FOUND" or attempt == self.verify_retries - 1:
+                    return integrity
+                await asyncio.sleep(self.verify_retry_delay)
+        except Exception:
+            return None
+        return "BLOCKCHAIN_RECORD_NOT_FOUND"
 
     def _blockchain_or_none(self, run_id: str) -> Any | None:
         del run_id
