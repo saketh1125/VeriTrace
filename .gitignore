@@ -4,8 +4,11 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .env
+.env.local
 var/
 *.pyc
 *.pyo
 *.onnx
 .DS_Store
+frontend/node_modules/
+frontend/dist/

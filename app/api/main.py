@@ -3,13 +3,25 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import TypeAdapter
+from pydantic.networks import HttpUrl
 
+from app.api.runs import router as runs_router
 from app.config.settings import settings
 from app.discovery.models import DiscoveryMethod, DiscoveryQuery, Platform
 from app.discovery.registry import build_registry
 
 app = FastAPI(title="HH Goa Face + Content Verification", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(runs_router)
 registry = build_registry(settings)
+_http_url = TypeAdapter(HttpUrl)
 
 
 @app.get("/health")
@@ -45,8 +57,8 @@ def discover(
         query = DiscoveryQuery(
             platform=platform,
             username=username,
-            profile_url=profile_url,
-            post_url=post_url,
+            profile_url=_http_url.validate_python(profile_url) if profile_url else None,
+            post_url=_http_url.validate_python(post_url) if post_url else None,
             max_posts=settings.max_posts_per_profile,
             method=method,
         )

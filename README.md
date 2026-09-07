@@ -105,8 +105,10 @@ app/
   evidence/        evidence model + canonical hashing
   blockchain/      Base Sepolia contract client
   verification/    end-to-end orchestration
+  runs/            run lifecycle + SSE event contract (`docs/RUN_API.md`)
 contracts/         Solidity registry
 scripts/            deployment utilities
+frontend/          thin verification console (React + Vite, backend is source of truth)
 docs/               durable architecture/security/data/development docs
 adr/                accepted architecture decisions
 tests/              unit/integration/fixture tests
@@ -148,6 +150,26 @@ python -m app.cli.main --platform instagram --profile example --max-posts 10
 
 ## Development order
 
+### InsightFace / ONNX Runtime setup
+
+Install the project dependencies (including the local InsightFace and ONNX Runtime adapter):
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+The first `FaceService()` construction downloads the configured InsightFace `buffalo_l`
+model pack into InsightFace's local model cache. It runs CPU-only by default. To smoke-test
+the real runtime against an image containing exactly one clear face, run:
+
+```bash
+python -m app.face.smoke_test path/to/face.jpg
+```
+
+The smoke test reports only embedding dimensions and detection score; it never prints or
+persists the embedding. Runtime initialization failures are surfaced as
+`INSIGHTFACE_INITIALIZATION_FAILED`.
+
 ### Phase 1 — Live Apify validation (current)
 
 Run each pinned Actor against a known public profile and known public post, inspect the actual dataset JSON, freeze sanitized fixtures, and harden normalization.
@@ -173,6 +195,8 @@ Deploy `EvidenceRegistry.sol` to Base Sepolia, attest evidence hashes, then inde
 Add consent, image input, platform target, progress, candidate results, and blockchain verification status.
 
 See `docs/DEVELOPMENT.md` for acceptance criteria.
+
+Phase 1 live Actor results and known provider quirks are recorded in [`docs/APIFY_VALIDATION.md`](docs/APIFY_VALIDATION.md).
 
 ## Security/privacy
 

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     evidence_registry_address: str = ""
     data_dir: str = "./var"
 
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="", case_sensitive=False)
+    model_config = SettingsConfigDict(env_file=(".env", ".env.local"), env_prefix="", case_sensitive=False)
 
 
 settings = Settings()

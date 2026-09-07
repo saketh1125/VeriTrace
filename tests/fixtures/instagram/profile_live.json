@@ -1,0 +1,15 @@
+[
+  {
+    "thumbnailUrl": "https://media.example.test/instagram/thumbnail.jpg",
+    "caption": "that’s his spa now",
+    "username": "instagram",
+    "fullName": "Instagram",
+    "mediaType": "video",
+    "mediaInfo": {"id": "27499285159675348", "videoUrl": "https://media.example.test/instagram/video.mp4"},
+    "videoUrl": "https://media.example.test/instagram/video.mp4",
+    "postUrl": "https://www.instagram.com/p/Dc30nJeRKKz/",
+    "shortcode": "Dc30nJeRKKz",
+    "postId": "3978880184454783667",
+    "timestamp": "2026-09-04T16:32:46.000Z"
+  }
+]

@@ -19,3 +19,15 @@ def make_record():
 def test_canonical_hash_is_stable():
     record = make_record()
     assert evidence_hash(record) == evidence_hash(record)
+
+
+def test_derived_hash_fields_do_not_change_evidence_hash():
+    record = make_record()
+    with_derived_fields = record.model_copy(
+        update={
+            "evidence_sha256": "b" * 64,
+            "blockchain_evidence_hash": "c" * 64,
+        }
+    )
+
+    assert evidence_hash(with_derived_fields) == evidence_hash(record)
