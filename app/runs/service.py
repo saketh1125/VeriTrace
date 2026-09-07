@@ -454,6 +454,8 @@ class RunService:
         blockchain = BlockchainView(evidence_hash=digest, registry=self.registry_address or None)
         if not attest:
             return blockchain
+        self.store.update(run_id, pipeline_step=PipelineStep.ATTESTING)
+        self.store.append_event(run_id, "BLOCKCHAIN_SUBMISSION_STARTED", {"evidence_sha256": digest})
         registry = self._blockchain_or_none(run_id)
         if registry is None:
             blockchain.status = "FAILED"
@@ -463,8 +465,6 @@ class RunService:
                 {"reason": "BLOCKCHAIN_NOT_CONFIGURED"},
             )
             return blockchain
-        self.store.update(run_id, pipeline_step=PipelineStep.ATTESTING)
-        self.store.append_event(run_id, "BLOCKCHAIN_SUBMISSION_STARTED", {"evidence_sha256": digest})
         try:
             tx_hash = await asyncio.to_thread(registry.attest, digest)
         except Exception as exc:

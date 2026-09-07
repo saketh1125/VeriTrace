@@ -263,6 +263,11 @@ def test_api_run_status_sse_preflight_and_diagnostics() -> None:
         for required in ("RUN_STARTED", "CANDIDATE_MATCH_RESULT", "RUN_COMPLETED"):
             assert required in streamed
 
+        resumed = client.get(f"/api/runs/{run_id}/events", headers={"Last-Event-ID": "0"})
+        resumed_names = [line[7:] for line in resumed.text.splitlines() if line.startswith("event: ")]
+        assert resumed_names == streamed[1:]
+        assert resumed_names and resumed_names[-1] == "RUN_COMPLETED"
+
         preflight = client.post(
             "/api/preflight", files={"face_image": ("face.jpg", b"selfie-bytes", "image/jpeg")}
         )
