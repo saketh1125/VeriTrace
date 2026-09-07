@@ -105,8 +105,10 @@ app/
   evidence/        evidence model + canonical hashing
   blockchain/      Base Sepolia contract client
   verification/    end-to-end orchestration
+  runs/            run lifecycle + SSE event contract (`docs/RUN_API.md`)
 contracts/         Solidity registry
 scripts/            deployment utilities
+frontend/          thin verification console (React + Vite, backend is source of truth)
 docs/               durable architecture/security/data/development docs
 adr/                accepted architecture decisions
 tests/              unit/integration/fixture tests

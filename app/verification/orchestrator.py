@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Awaitable, Callable, Protocol
+from typing import Any, Awaitable, Callable, Protocol
 
 import numpy as np
 
@@ -27,6 +27,13 @@ class FaceProcessor(Protocol):
 
 class AttestationService(Protocol):
     def attest(self, evidence_hash_hex: str) -> str: ...
+
+
+class EventSink(Protocol):
+    """Observer for pipeline boundaries. Lets SSE streaming reuse the one
+    candidate loop instead of duplicating matching/evidence logic."""
+
+    def emit(self, event: str, data: dict[str, Any]) -> None: ...
 
 
 MediaFetcher = Callable[[str], Awaitable[tuple[bytes, str]]]
@@ -66,6 +73,7 @@ class VerificationOrchestrator:
         media_fetcher: MediaFetcher = fetch_bytes,
         image_similarity: ImageSimilarity = perceptual_similarity,
         clock: Clock = _utcnow,
+        events: EventSink | None = None,
     ) -> None:
         self.face_service = face_service
         self.face_threshold = face_threshold
@@ -74,6 +82,11 @@ class VerificationOrchestrator:
         self.media_fetcher = media_fetcher
         self.image_similarity = image_similarity
         self.clock = clock
+        self.events = events
+
+    def _emit(self, event: str, data: dict[str, Any]) -> None:
+        if self.events is not None:
+            self.events.emit(event, data)
 
     async def run(
         self,
@@ -100,8 +113,19 @@ class VerificationOrchestrator:
         if query is not None:
             if self.discovery_provider is None:
                 raise ValueError("DISCOVERY_PROVIDER_REQUIRED")
+            self._emit(
+                "DISCOVERY_STARTED",
+                {"platform": query.platform.value, "method": query.method.value},
+            )
             posts = self.discovery_provider.discover(query)
             discovery_method = query.method.value
+            self._emit(
+                "DISCOVERY_COMPLETED",
+                {
+                    "candidate_posts": len(posts),
+                    "media_assets": sum(len(post.media) for post in posts),
+                },
+            )
         if posts is None:
             raise ValueError("DISCOVERY_POSTS_REQUIRED")
         if input_face is None:
@@ -112,16 +136,52 @@ class VerificationOrchestrator:
         now = self.clock()
         consent_at = consent_timestamp or now
         failures: list[CandidateFailure] = []
-        for post, media in self._rank_posts(posts):
+        for index, (post, media) in enumerate(self._rank_posts(posts)):
             media_url = str(media.url)
+            post_url = str(post.post_url)
+            candidate_ref = {
+                "post_url": post_url,
+                "media_url": media_url,
+                "index": index,
+            }
             if media.media_type != "image":
                 failures.append(CandidateFailure(media_url, "UNSUPPORTED_MEDIA_TYPE"))
+                self._emit(
+                    "CANDIDATE_MATCH_RESULT",
+                    {
+                        **candidate_ref,
+                        "decision": "reject",
+                        "reason": "UNSUPPORTED_MEDIA_TYPE",
+                        "face_threshold": self.face_threshold,
+                    },
+                )
                 continue
+            self._emit("MEDIA_FETCH_STARTED", {**candidate_ref, "media_type": media.media_type})
             try:
-                media_bytes, _ = await self.media_fetcher(media_url)
+                media_bytes, content_type = await self.media_fetcher(media_url)
+            except Exception as exc:
+                reason = type(exc).__name__
+                failures.append(CandidateFailure(media_url, reason))
+                self._emit("MEDIA_FETCH_COMPLETED", {**candidate_ref, "ok": False, "reason": reason})
+                continue
+            self._emit(
+                "MEDIA_FETCH_COMPLETED",
+                {**candidate_ref, "ok": True, "content_type": content_type},
+            )
+            self._emit("CANDIDATE_MATCH_STARTED", candidate_ref)
+            try:
                 embeddings = self.face_service.embeddings_in_image(media_bytes)
                 if not embeddings:
                     failures.append(CandidateFailure(media_url, "NO_FACE_FOUND"))
+                    self._emit(
+                        "CANDIDATE_MATCH_RESULT",
+                        {
+                            **candidate_ref,
+                            "decision": "reject",
+                            "reason": "NO_FACE_FOUND",
+                            "face_threshold": self.face_threshold,
+                        },
+                    )
                     continue
                 face_similarity = max(
                     self.face_service.cosine_similarity(face.vector, candidate)
@@ -130,11 +190,37 @@ class VerificationOrchestrator:
                 decision = decide(face_similarity, self.face_threshold)
                 if not decision.verified:
                     failures.append(CandidateFailure(media_url, "FACE_THRESHOLD_NOT_MET"))
+                    self._emit(
+                        "CANDIDATE_MATCH_RESULT",
+                        {
+                            **candidate_ref,
+                            "decision": "reject",
+                            "reason": "FACE_THRESHOLD_NOT_MET",
+                            "face_similarity": face_similarity,
+                            "face_threshold": self.face_threshold,
+                        },
+                    )
                     continue
                 image_similarity = self.image_similarity(input_image, media_bytes)
             except Exception as exc:
-                failures.append(CandidateFailure(media_url, type(exc).__name__))
+                reason = type(exc).__name__
+                failures.append(CandidateFailure(media_url, reason))
+                self._emit(
+                    "CANDIDATE_MATCH_RESULT",
+                    {**candidate_ref, "decision": "reject", "reason": reason},
+                )
                 continue
+            self._emit(
+                "CANDIDATE_MATCH_RESULT",
+                {
+                    **candidate_ref,
+                    "decision": "accept",
+                    "reason": "VERIFIED_MATCH",
+                    "face_similarity": face_similarity,
+                    "face_threshold": self.face_threshold,
+                    "image_similarity": image_similarity,
+                },
+            )
 
             source = EvidenceSource(
                 platform=post.platform.value,
@@ -167,11 +253,18 @@ class VerificationOrchestrator:
             )
             digest = evidence_hash(record)
             record = record.model_copy(update={"evidence_sha256": digest})
+            self._emit(
+                "EVIDENCE_CREATED",
+                {"post_url": str(post.post_url), "media_url": media_url},
+            )
+            self._emit("HASH_COMPUTED", {"evidence_sha256": digest})
             tx_hash: str | None = None
             if attest:
                 if self.blockchain_service is None:
                     raise ValueError("BLOCKCHAIN_SERVICE_REQUIRED")
+                self._emit("BLOCKCHAIN_SUBMISSION_STARTED", {"evidence_sha256": digest})
                 tx_hash = self.blockchain_service.attest(digest)
+                self._emit("BLOCKCHAIN_SUBMITTED", {"tx_hash": tx_hash})
                 record = record.model_copy(update={"blockchain_evidence_hash": digest})
             return VerifiedMatch(
                 post=post,
