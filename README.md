@@ -272,6 +272,30 @@ templates on-chain or in logs; provider output and public URLs are untrusted
 (HTTPS-only, timeouts, size limits, content-type checks, SSRF blocking); no
 private-account access or access-control bypass; secrets only via environment.
 
+## Known limitations
+
+- **Correspondence only.** A `VERIFIED` run proves the input face resembles a face in
+  public media under the configured model/threshold — not identity, authorship,
+  ownership, or consent of others pictured.
+- **One-face input.** The input image must contain exactly one usable face; candidate
+  media may contain several (best match wins).
+- **Images only (v1).** Video/unsupported media candidates are skipped with a structured
+  reason; bounded keyframe extraction is not a v1 verification path.
+- **Provider dependence.** Pinned Apify Actors are unstable community integrations that
+  can change schema, throttle, or fail per mode (e.g. LinkedIn direct-post login
+  challenges, Facebook direct-post tunnel errors, text-only Reddit posts). Failures
+  surface as structured errors, never as matches. See
+  [`docs/APIFY_VALIDATION.md`](docs/APIFY_VALIDATION.md).
+- **Public content only.** Private accounts, login-walled, or deleted content is
+  unreachable by design.
+- **Ephemeral runs.** Run state and event history live in backend process memory;
+  restarting the API clears history.
+- **Chain read lag.** A freshly mined attestation can take seconds to become visible
+  on public RPC replicas; the verifier re-reads briefly before concluding
+  `BLOCKCHAIN_RECORD_NOT_FOUND`.
+- **Operating costs.** Live runs consume Apify platform usage and (tiny) Base Sepolia
+  gas from the operator's funded key.
+
 ## Docs index
 
 - `docs/ARCHITECTURE.md` — locked component boundaries and workflow
