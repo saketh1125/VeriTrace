@@ -66,6 +66,7 @@ class FakeChain:
         self.exists = exists
         self.attest_error = attest_error
         self.attested: list[str] = []
+        self.verify_calls = 0
 
     def attest(self, digest: str) -> str:
         if self.attest_error is not None:
@@ -74,7 +75,12 @@ class FakeChain:
         return "0xabc123"
 
     def verify(self, digest: str) -> dict:
-        return {"exists": self.exists, "timestamp": 1, "submitter": "0xattester"}
+        self.verify_calls += 1
+        if isinstance(self.exists, list):
+            current = self.exists[min(self.verify_calls - 1, len(self.exists) - 1)]
+        else:
+            current = self.exists
+        return {"exists": current, "timestamp": 1, "submitter": "0xattester"}
 
 
 async def fake_fetch(url: str) -> tuple[bytes, str]:
@@ -167,6 +173,19 @@ async def test_missing_chain_record_is_surfaced_not_hidden() -> None:
     assert final.result is not None
     assert final.result.blockchain.integrity == "BLOCKCHAIN_RECORD_NOT_FOUND"
     assert "BLOCKCHAIN_VERIFIED" in event_names(service, record.run_id)
+
+
+@pytest.mark.asyncio
+async def test_lagging_chain_read_is_retried_before_giving_up() -> None:
+    lagging = FakeChain(exists=[False, False, True])
+    service, _ = make_service(chain=lagging)
+    service.verify_retry_delay = 0.0
+    record, query = service.create_run(b"selfie", Platform.INSTAGRAM, "profile", "example", "1.0", True, 5, True)
+    final = await service.execute_run(record.run_id, b"selfie", query, "1.0", True)
+
+    assert final.result is not None
+    assert final.result.blockchain.integrity == "VERIFIED"
+    assert lagging.verify_calls == 3
 
 
 @pytest.mark.asyncio
