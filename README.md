@@ -306,7 +306,3 @@ private-account access or access-control bypass; secrets only via environment.
 - `docs/APIFY_VALIDATION.md` — live provider evidence
 - `adr/` — accepted decisions (0005–0010)
 
-## Codex
-
-`AGENTS.md` is intentionally short — a map to the durable repository knowledge. Read the
-relevant `docs/` and `adr/` files before modifying architecture-sensitive code.
