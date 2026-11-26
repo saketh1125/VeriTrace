@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Decision
 
-Apify is an integration mechanism, not a core domain dependency. Actor IDs, input schemas and output normalization remain confined to `app/discovery`.
+Apify is an integration mechanism, not a core domain dependency. Input schemas and output normalization remain confined to `app/discovery`, while default Actor IDs are configured in `app/config/settings.py` and injected via `app/discovery/registry.py`.
 
 ## Consequence
 

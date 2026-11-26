@@ -17,7 +17,7 @@ The user supplies a public post URL. The platform adapter fetches that exact pos
 The user supplies a platform plus username/profile URL. The adapter enumerates a bounded number of public posts, returning canonical post URLs and media URLs where available.
 
 ### C. Reverse-image fallback
-Generic reverse-image search is an optional fallback provider. It is not a critical path and cannot be promoted to one without a benchmark and ADR.
+Generic reverse-image search is not implemented in the current codebase (only `direct-post` and `profile` discovery methods are supported). It is not a critical path and cannot be promoted to one without a benchmark and ADR.
 
 ## 3. End-to-end workflow
 
@@ -53,7 +53,7 @@ Consent + Face Image + Platform + (Post URL | Profile)
                |                   |
                v                   v
         Image Similarity      Face Detection
-        pHash / ranking       + Face Embedding
+        pHash (post-match)    + Face Embedding
                |                   |
                +---------+---------+
                          |
@@ -86,7 +86,7 @@ Consent + Face Image + Platform + (Post URL | Profile)
 | Component | Responsibility | Must not do |
 |---|---|---|
 | `api` | HTTP input/output, request validation, orchestration entrypoint | Platform-specific scraping logic |
-| `cli` | Local operator workflow using same services as API | Duplicate verification logic |
+| `cli` | Local social-content discovery CLI using `build_registry` from `app/discovery` | Duplicate verification logic |
 | `discovery` | Resolve supplied public social target into normalized posts/media | Decide face identity |
 | `extraction` | Download/validate media and later extract video frames | Trust arbitrary URLs |
 | `face` | Detect faces, quality checks, create embeddings | Search the web |
@@ -108,7 +108,7 @@ FacebookApifyProvider
 RedditApifyProvider
 ```
 
-Apify Actor IDs and Actor-specific input/output details are configuration/integration details. They must remain confined to `app/discovery`.
+Default Apify Actor IDs are configured in `app/config/settings.py` and injected via `app/discovery/registry.py`, while Actor-specific input/output integration details remain confined to `app/discovery`.
 
 ### Current v1 Actor targets
 
@@ -177,7 +177,7 @@ Multiple faces are allowed in candidate media. Multiple faces in the input are r
 
 Face similarity is the **primary identity/correspondence gate**.
 
-Perceptual image similarity (pHash) is a **ranking/corroboration signal**. It is not required for a valid face match because background, crop, lighting, pose and scene can change substantially.
+Perceptual image similarity (pHash) is a **post-match corroboration signal** recorded in evidence metadata (candidate posts are iterated in discovery order, not ranked by pHash). It is not required for a valid face match because background, crop, lighting, pose and scene can change substantially.
 
 Do not use exact embedding-vector equality. Use the similarity metric appropriate to the selected model (cosine similarity for the current implementation).
 

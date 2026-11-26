@@ -104,7 +104,7 @@ Hashing rules: [`docs/DATA_CONTRACTS.md`](docs/DATA_CONTRACTS.md).
 | API | FastAPI + Uvicorn | HTTP boundary, run/SSE endpoints, validation |
 | Schemas | Pydantic v2 + pydantic-settings | Contracts, env-driven config |
 | Face | InsightFace `buffalo_l` (ArcFace) + ONNX Runtime (CPU) | Local detection, quality gates, 512-d embeddings |
-| Vision utils | OpenCV (headless) + Pillow | Decoding, face crops |
+| Vision utils | OpenCV (headless) + Pillow | Image decoding and RGB conversion |
 | Image signal | ImageHash (pHash) | Supporting similarity, never the gate |
 | Discovery | Apify Python client (pinned community Actors) | Public-post retrieval behind provider interface |
 | Media fetch | HTTPX | Bounded HTTPS fetch with SSRF/private-net defenses |

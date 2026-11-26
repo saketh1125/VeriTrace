@@ -15,7 +15,7 @@ DiscoveryQuery(
 )
 ```
 
-Invariant: exactly one discovery target is supplied for the selected method.
+Note: `DiscoveryQuery` does not enforce a single-target validator; `ApifySocialProvider.discover` selects `post_url` for `direct-post` and `profile_url` (falling back to `username`) for `profile`.
 
 ## 2. MediaAsset
 
@@ -49,18 +49,14 @@ raw
 
 `post_url` is mandatory for evidence provenance. Unknown metadata remains absent rather than fabricated.
 
-## 4. CandidateMatch
+## 4. Matching and Candidate Models
 
-Internal matching result:
+Implemented matching and candidate models (`MatchDecision`, `VerifiedMatch`, `CandidateView`):
 
 ```text
-post
-media
-image_similarity?
-best_face_similarity
-matched_face_index
-face_threshold
-accepted
+MatchDecision: verified, reason
+VerifiedMatch: post, media_url, media_type, image_similarity, face_similarity, evidence, attestation_tx_hash?, candidate_failures
+CandidateView: candidate_id, post_url, platform, author?, published_at?, media_url, media_type, status, face_similarity?, image_similarity?, reason?
 ```
 
 `accepted` is derived from the match policy and must not be supplied by a platform provider.
@@ -86,7 +82,7 @@ Example:
 ```json
 {
   "schema_version": "1.0",
-  "claim_boundary": "face-content correspondence; not legal identity or authorship",
+  "claim_boundary": "This record establishes correspondence to the supplied face embedding and integrity of the attested evidence; it does not establish legal identity, authorship, or truthfulness of the post.",
   "source": {
     "platform": "instagram",
     "post_url": "https://example.invalid/p/abc",
@@ -102,16 +98,16 @@ Example:
   "matching": {
     "image_similarity": 0.81,
     "face_similarity": 0.87,
+    "image_threshold": 0.0,
     "face_threshold": 0.45
   },
-  "retrieval": {
-    "discovery_method": "profile",
-    "retrieved_at": "2026-09-06T12:01:00Z"
-  },
-  "consent": {
-    "version": "1.0",
-    "accepted_at": "2026-09-06T12:00:00Z"
-  }
+  "discovery_method": "profile",
+  "retrieved_at": "2026-09-06T12:01:00Z",
+  "consent_version": "1.0",
+  "consent_timestamp": "2026-09-06T12:00:00Z",
+  "input_face_embedding_sha256": null,
+  "blockchain_evidence_hash": null,
+  "evidence_sha256": null
 }
 ```
 

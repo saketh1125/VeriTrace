@@ -22,4 +22,4 @@ The face model never performs web discovery. It verifies retrieved candidate med
 - The task becomes a bounded candidate-retrieval problem.
 - Platform adapters can use official or community tooling without leaking provider-specific details into core logic.
 - The product does not claim global internet discovery from a face alone.
-- Reverse-image search remains an optional fallback.
+- Reverse-image search is not implemented in the current codebase (only `direct-post` and `profile` discovery methods are supported).
