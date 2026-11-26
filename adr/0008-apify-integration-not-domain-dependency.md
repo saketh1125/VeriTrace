@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Decision
 
-Apify Actors are called only from `app/discovery`. Their Actor IDs, request payloads, output field names, and normalization rules are isolated behind `SocialContentProvider`.
+Apify Actors are called only from `app/discovery`. Their request payloads, output field names, and normalization rules are isolated behind `SocialContentProvider` in `app/discovery/apify_provider.py`, while default Actor IDs are configured in `app/config/settings.py` and injected via `app/discovery/registry.py`.
 
 ## Rationale
 

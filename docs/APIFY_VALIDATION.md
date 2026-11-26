@@ -13,6 +13,6 @@ Validated 2026-09-06/07 with bounded one-post requests against public targets. R
 | Reddit profile | `sND0I7ppyhr3888zY` | no post candidates | Actor fell back to RSS and returned profile/comment records; non-`post` records are ignored. |
 | Reddit direct post | `FdRilDFPHIkW6hJ8M` | 1 normalized post, 0 media assets | Direct public text post resolves; it is correctly ineligible for media face verification. |
 
-Sanitized response fixtures and normalization tests live under `tests/fixtures/` and `tests/test_discovery_normalization.py`. Media URLs in fixtures are deliberately replaced with non-routable example hosts; the Instagram live thumbnail was separately fetched through `MediaFetcher` as `image/jpeg` (31,998 bytes).
+Normalization tests live in `tests/test_discovery_normalization.py`, which expects sanitized response fixtures under `tests/fixtures/` (not present in this repository snapshot). Media URLs in fixtures are deliberately replaced with non-routable example hosts; the Instagram live thumbnail was separately fetched through `MediaFetcher` as `image/jpeg` (31,998 bytes).
 
 The pinned community Actors remain replaceable integrations. These observations are validation evidence, not availability guarantees.

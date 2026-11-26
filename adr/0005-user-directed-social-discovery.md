@@ -12,4 +12,4 @@ Global reverse-image search proved operationally unreliable for this use case. U
 
 ## Consequence
 
-The product does not claim to find an unknown person's entire internet footprint from a face alone. Reverse-image search remains a fallback capability.
+The product does not claim to find an unknown person's entire internet footprint from a face alone. Reverse-image search is not implemented in the current codebase; only `direct-post` and `profile` discovery methods are supported.

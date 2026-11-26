@@ -41,5 +41,6 @@ a demonstrated need.
 - The UI contract is implementable without backend redesign; routing changes
   stay inside the frontend API adapter.
 - `VerificationOrchestrator` gains event hooks; existing tests pass unchanged.
-- SSE reconnect rule: clients `GET /api/runs/{run_id}` first, then resume the
-  stream from `Last-Event-ID`, so no UI state depends on missed events.
+- SSE reconnect rule: clients `GET /api/runs/{run_id}` first before connecting or reconnecting,
+  so no UI state depends on missed events. The backend supports resuming from `Last-Event-ID`,
+  while the frontend closes `EventSource` on error and opens a new stream.

@@ -66,7 +66,7 @@ Before claiming a task is complete:
 6. Do not claim live integration success unless the live integration was actually executed.
 
 ## Current implementation priority
-Follow `docs/DEVELOPMENT.md`. The next priority is live Apify provider validation plus fixture normalization, then face runtime integration, then end-to-end orchestration.
+Follow `docs/DEVELOPMENT.md`. Apify provider normalization tests (`tests/test_discovery_normalization.py`), local InsightFace integration (`app/face/service.py`, `app/face/smoke_test.py`), and end-to-end orchestration (`app/verification/orchestrator.py`, `app/runs/service.py`) are implemented.
 
 ## Change discipline
 When a request conflicts with this file or an ADR, explain the conflict and propose the smallest architectural change needed. Do not silently make a breaking architectural decision.
